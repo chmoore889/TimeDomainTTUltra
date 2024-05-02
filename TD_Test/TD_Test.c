@@ -3,6 +3,6 @@
 
 int main() {
     void* tagger = getTagger();
-    printf("Got Time Tagger %p", NULL);
+    printf("Got Time Tagger %p", tagger);
     return 0;
 }
