@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include "conio.h"
 #include "ExternalInterface.h"
 
 int main() {
@@ -26,18 +28,23 @@ int main() {
     startMeasurement(measurement);
     printf("Measurement started\n");
     
-    while (getchar() != '\n') {
+    while (1) {
         MacroMicro_t* data;
         size_t dataSize;
         int ret = getData(measurement, &data, &dataSize);
-        if(ret != 0) {
+        free(data);
+        if(ret) {
 			printf("Error getting data\n");
 			break;
-		}
+        }
+        else if (dataSize) {
+            printf("Got data %zu\n", dataSize);
+        }
     }
 
     printf("Stopping measurement\n");
     stopMeasurement(measurement);
+    freeMeasurement(measurement);
 
     printf("Freeing taggers\n");
 

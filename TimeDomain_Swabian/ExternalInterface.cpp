@@ -62,17 +62,25 @@ void stopMeasurement(void* obj) {
 
 int getData(void* obj, MacroMicro_t** outputData, size_t* outputDataSize) {
 	TDMeasurement* castedMeasurement = static_cast<TDMeasurement*>(obj);
-	std::vector<MacroMicro_t> vectorData = castedMeasurement->getData();
+	std::pair<std::vector<MacroMicro_t>, bool> dataRaw = castedMeasurement->getData();
+
+	if(dataRaw.second) {
+		return 2;
+	}
+
+	//Set size and return early if no data
+	*outputDataSize = dataRaw.first.size();
+	if (*outputDataSize == 0) {
+		*outputData = NULL;
+		return 0;
+	}
 
 	//Copy to heap allocated array
-	*outputDataSize = vectorData.size();
 	*outputData = (MacroMicro_t*)malloc(*outputDataSize * sizeof(**outputData));
 	if (*outputData == NULL) {
 		return 1;
 	}
 
-	for (size_t x = 0; x < *outputDataSize; x++) {
-		*outputData[x] = vectorData[x];
-	}
+	std::copy(dataRaw.first.begin(), dataRaw.first.end(), *outputData);
 	return 0;
 }

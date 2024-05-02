@@ -12,7 +12,7 @@ public:
 
 	~TDMeasurement();
 
-	std::vector<MacroMicro_t> getData();
+	std::pair<std::vector<MacroMicro_t>, bool> getData();
 
 protected:
 	/**

@@ -1,4 +1,5 @@
 #include <cassert>
+#include <stdio.h>
 #include "TDMeasurement.h"
 
 TDMeasurement::TDMeasurement(TimeTaggerBase* tagger, channel_t laser_channel, std::set<channel_t> detector_channels,
@@ -19,6 +20,9 @@ TDMeasurement::TDMeasurement(TimeTaggerBase* tagger, channel_t laser_channel, st
     //Reserve space for a few detected photons per laser period
     unprocessedTags.reserve(detector_channels.size() * 8);
 
+    //Reserve lots of space for photons
+    data.reserve(20000000);
+
     finishInitialization();
 }
 
@@ -28,14 +32,14 @@ TDMeasurement::~TDMeasurement() {
 }
 
 // Get data copies the local data to a newly allocated memory.
-std::vector<MacroMicro_t> TDMeasurement::getData() {
+std::pair<std::vector<MacroMicro_t>, bool> TDMeasurement::getData() {
     // This lock object will ensure that no other thread is within next_impl.
     auto lk = getLock();
 
     const std::vector<MacroMicro_t> toReturn = data;
     data.clear();
 
-    return toReturn;
+    return std::make_pair(toReturn, errorFlag);
 }
 
 void TDMeasurement::clear_impl() {
@@ -53,16 +57,19 @@ void TDMeasurement::on_stop() {
 // Here we handle the incoming time-tags.
 bool TDMeasurement::next_impl(std::vector<Tag>& incoming_tags, timestamp_t begin_time, timestamp_t end_time) {
     // iterate over all the tags received
+    //printf("incoming tags length: %zu\n", incoming_tags.size());
     for (const Tag& tag : incoming_tags) {
         switch (tag.type) {
         case Tag::Type::Error:         // happens on clock switches and USB errors
         case Tag::Type::OverflowBegin: // indicates the begin of overflows
         case Tag::Type::OverflowEnd:   // indicates the end of overflows
         case Tag::Type::MissedEvents:  // reports the amount of tags in overflow
+            //printf("Overflow\n");
             errorFlag = true;
             break;
 
         case Tag::Type::TimeTag:
+            //printf("channel %i\n", tag.channel);
             if (tag.channel == laser_channel) {
                 data.reserve(data.size() + unprocessedTags.size());
                 for (auto detTime : unprocessedTags) {
@@ -73,6 +80,7 @@ bool TDMeasurement::next_impl(std::vector<Tag>& incoming_tags, timestamp_t begin
                     };
                     data.push_back(toPush);
                 }
+                unprocessedTags.clear();
             }
             //If not the laser channel, it must be detector
             else {
