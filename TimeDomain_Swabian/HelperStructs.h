@@ -13,7 +13,6 @@ typedef struct
 	__int16 laserPeriod;
 	double laserTriggerVoltage;
 
-
 	int* detectorChannels;
 	size_t detectorChannelsLength;
 	double detectorTriggerVoltage;

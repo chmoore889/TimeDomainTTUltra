@@ -1,7 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "conio.h"
 #include "ExternalInterface.h"
+
+#include "windows.h"
+
+bool iskeypressed(unsigned timeout_ms) {
+    return WaitForSingleObject(
+        GetStdHandle(STD_INPUT_HANDLE),
+        timeout_ms
+    ) == WAIT_OBJECT_0;
+}
 
 int main() {
     void* tagger = getTagger();
@@ -27,11 +37,21 @@ int main() {
     printf("Starting measurement\n");
     startMeasurement(measurement);
     printf("Measurement started\n");
+
+    //Open file to write data
+    FILE* file = fopen("data.bin", "wb");
+    if (file == NULL) {
+		printf("Error opening file\n");
+		return 1;
+	}
     
-    while (1) {
+    while (!iskeypressed(50)) {
         MacroMicro_t* data;
         size_t dataSize;
         int ret = getData(measurement, &data, &dataSize);
+        if (dataSize) {
+			fwrite(data, sizeof(*data), dataSize, file);
+		}
         free(data);
         if(ret) {
 			printf("Error getting data\n");
@@ -45,6 +65,8 @@ int main() {
     printf("Stopping measurement\n");
     stopMeasurement(measurement);
     freeMeasurement(measurement);
+
+    fclose(file);
 
     printf("Freeing taggers\n");
 
