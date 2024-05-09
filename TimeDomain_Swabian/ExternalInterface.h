@@ -14,7 +14,7 @@ extern "C" {
 	TD_API void* getTagger();
 	TD_API void freeTagger(void* tagger);
 
-	TD_API void* newMeasurement(void* tagger, MeasurementParams_t params);
+	TD_API void* newMeasurement(void* tagger, MeasurementParams_t params, const char* directory);
 	TD_API void freeMeasurement(void* obj);
 	TD_API void startMeasurement(void* obj);
 	TD_API void stopMeasurement(void* obj);

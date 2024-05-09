@@ -72,7 +72,7 @@ bool TDMeasurement::next_impl(std::vector<Tag>& incoming_tags, timestamp_t begin
             //printf("channel %i\n", tag.channel);
             if (tag.channel == laser_channel) {
                 data.reserve(data.size() + unprocessedTags.size());
-                for (auto detTime : unprocessedTags) {
+                for (auto& detTime : unprocessedTags) {
                     const MacroMicro_t toPush = {
                         detTime.first,//channel
                         detTime.second,//macro

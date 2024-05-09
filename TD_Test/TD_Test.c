@@ -21,6 +21,7 @@ int main() {
     }
 
     int channels[] = {2};
+
     void* measurement = newMeasurement(tagger, (MeasurementParams_t) {
         .laserChannel = -1,
         .laserTriggerVoltage = -0.5,
@@ -28,31 +29,20 @@ int main() {
         .detectorChannels = channels,
         .detectorChannelsLength = sizeof(channels) / sizeof(*channels),
         .detectorTriggerVoltage = 0.9,
-    });
+    }, "C:\\Users\\Christopher\\Desktop");
     if (measurement == NULL) {
         freeTagger(tagger);
         return 1;
     }
 
     printf("Starting measurement\n");
-    startMeasurement(measurement);
-    printf("Measurement started\n");
+    //startMeasurement(measurement);
+    //printf("Measurement started\n");
 
-    //Open file to write data
-    FILE* file = fopen("data.bin", "wb");
-    if (file == NULL) {
-		printf("Error opening file\n");
-		return 1;
-	}
-    
     while (!iskeypressed(50)) {
         MacroMicro_t* data;
         size_t dataSize;
         int ret = getData(measurement, &data, &dataSize);
-        if (dataSize) {
-			fwrite(data, sizeof(*data), dataSize, file);
-		}
-        free(data);
         if(ret) {
 			printf("Error getting data\n");
 			break;
@@ -60,13 +50,12 @@ int main() {
         else if (dataSize) {
             printf("Got data %zu\n", dataSize);
         }
+        free(data);
     }
 
     printf("Stopping measurement\n");
     stopMeasurement(measurement);
     freeMeasurement(measurement);
-
-    fclose(file);
 
     printf("Freeing taggers\n");
 
