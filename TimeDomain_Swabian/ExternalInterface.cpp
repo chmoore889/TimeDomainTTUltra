@@ -84,9 +84,9 @@ void* newMeasurement(void* tagger, MeasurementParams_t params, const char* direc
 			if (ret) {
 				printf("Error opening file %s\n", filename);
 				for (size_t j = 0; j <= i; j++) {
-					free(fileWriteDatas[i].buffer);
+					free(fileWriteDatas[j].buffer);
 					if (j != i) {
-						fclose(fileWriteDatas[i].file);
+						fclose(fileWriteDatas[j].file);
 					}
 				}
 				return NULL;

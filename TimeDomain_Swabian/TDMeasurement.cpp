@@ -33,13 +33,24 @@ TDMeasurement::~TDMeasurement() {
 
 // Get data copies the local data to a newly allocated memory.
 std::pair<std::vector<MacroMicro_t>, bool> TDMeasurement::getData() {
-    // This lock object will ensure that no other thread is within next_impl.
-    auto lk = getLock();
+    std::vector<MacroMicro_t> toReturn;
+    bool flagState;
 
-    const std::vector<MacroMicro_t> toReturn = data;
-    data.clear();
+    // Isolate the lock in its own scope
+    {
+        auto lk = getLock();
 
-    return std::make_pair(toReturn, errorFlag);
+        toReturn.swap(data);    // O(1) instant pointer swap
+        data.reserve(20000000); // Allocate fresh block for the next batch
+
+        flagState = errorFlag;  // Capture the sticky flag without resetting it
+
+        // 'lk' falls out of scope here. The mutex is released immediately, 
+        // completely unblocking next_impl.
+    }
+
+    // Pair construction and return execution happen safely outside the lock
+    return std::make_pair(std::move(toReturn), flagState);
 }
 
 void TDMeasurement::clear_impl() {

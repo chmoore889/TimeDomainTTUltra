@@ -20,16 +20,16 @@ int main() {
         return 1;
     }
 
-    int channels[] = {2};
+    int channels[] = {1};
 
     void* measurement = newMeasurement(tagger, (MeasurementParams_t) {
-        .laserChannel = -1,
+        .laserChannel = -2,
         .laserTriggerVoltage = -0.5,
         .laserPeriod = 12500,
         .detectorChannels = channels,
         .detectorChannelsLength = sizeof(channels) / sizeof(*channels),
         .detectorTriggerVoltage = 0.9,
-    }, "C:\\Users\\Christopher\\Desktop");
+    }, "C:\\Users\\sunar\\Desktop");
     if (measurement == NULL) {
         freeTagger(tagger);
         return 1;
