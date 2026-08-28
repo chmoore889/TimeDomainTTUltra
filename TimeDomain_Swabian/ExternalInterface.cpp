@@ -1,12 +1,15 @@
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
+
 #include "TDMeasurement.h"
 #include "ExternalInterface.h"
 #include "windows.h"
 
 #define member_size(type, member) (sizeof( ((type *)0)->member ))
 #define PACKED_SIZE (member_size(MacroMicro_t, macroTime) + member_size(MacroMicro_t, microTime))
-
-static bool enableFileWrite = false;
-static char outputDir[MAX_PATH];
 
 typedef struct {
 	FILE* file;
@@ -17,22 +20,76 @@ typedef struct {
 } FileWriteData;
 
 static int channelIndexOf(FileWriteData* channelData, size_t length, int channel) {
-	for (int i = 0; i < length; i++) {
-		if (channelData[i].detectorChannel == channel) {
-			return i;
-		}
+	for (size_t i = 0; i < length; i++) {
+		if (channelData[i].detectorChannel == channel) return i;
 	}
 	return -1;
 }
 
-static FileWriteData* fileWriteDatas;
-static size_t fileWriteDatasLength;
+// 1. Thread State Encapsulation (Eliminates Static Globals)
+struct MeasurementWrapper {
+	TDMeasurement* measurement;
+	bool enableFileWrite = false;
+	FileWriteData* fileWriteDatas = nullptr;
+	size_t fileWriteDatasLength = 0;
+
+	std::queue<std::vector<MacroMicro_t>> diskQueue;
+	std::queue<std::vector<MacroMicro_t>> recycleQueue; // Fixes Heap Thrashing
+	std::mutex diskMutex;
+	std::condition_variable diskCV;
+	std::atomic<bool> diskThreadRunning{ false };
+	std::thread diskThread;
+
+	std::vector<MacroMicro_t> noFileBuffer; // Persistent buffer for non-saving runs
+};
+
+static void fileWriterWorker(MeasurementWrapper* wrapper) {
+	while (wrapper->diskThreadRunning || !wrapper->diskQueue.empty()) {
+		std::vector<MacroMicro_t> batch;
+		{
+			std::unique_lock<std::mutex> lock(wrapper->diskMutex);
+			wrapper->diskCV.wait(lock, [wrapper] { return !wrapper->diskQueue.empty() || !wrapper->diskThreadRunning; });
+			if (!wrapper->diskThreadRunning && wrapper->diskQueue.empty()) break;
+
+			batch = std::move(wrapper->diskQueue.front());
+			wrapper->diskQueue.pop();
+		}
+
+		for (const auto& d : batch) {
+			int channelIndex = channelIndexOf(wrapper->fileWriteDatas, wrapper->fileWriteDatasLength, d.channel);
+			if (channelIndex < 0) continue;
+
+			if (wrapper->fileWriteDatas[channelIndex].bufferElements == wrapper->fileWriteDatas[channelIndex].bufferSizeElements) {
+				char* temp = (char*)realloc(wrapper->fileWriteDatas[channelIndex].buffer, 2 * wrapper->fileWriteDatas[channelIndex].bufferSizeElements * PACKED_SIZE);
+				if (temp) {
+					wrapper->fileWriteDatas[channelIndex].buffer = temp;
+					wrapper->fileWriteDatas[channelIndex].bufferSizeElements *= 2;
+				}
+			}
+			char* buffer = wrapper->fileWriteDatas[channelIndex].buffer + wrapper->fileWriteDatas[channelIndex].bufferElements * PACKED_SIZE;
+			memcpy(buffer, &d.macroTime, sizeof(d.macroTime));
+			memcpy(buffer + sizeof(d.macroTime), &d.microTime, sizeof(d.microTime));
+			wrapper->fileWriteDatas[channelIndex].bufferElements++;
+		}
+		for (size_t x = 0; x < wrapper->fileWriteDatasLength; x++) {
+			if (wrapper->fileWriteDatas[x].bufferElements > 0) {
+				fwrite(wrapper->fileWriteDatas[x].buffer, PACKED_SIZE, wrapper->fileWriteDatas[x].bufferElements, wrapper->fileWriteDatas[x].file);
+				wrapper->fileWriteDatas[x].bufferElements = 0;
+			}
+		}
+
+		// Return capacity to the recycle queue
+		batch.clear();
+		{
+			std::lock_guard<std::mutex> lock(wrapper->diskMutex);
+			wrapper->recycleQueue.push(std::move(batch));
+		}
+	}
+}
 
 void* getTagger() {
-	TimeTagger* tagger;
 	try {
-		tagger = createTimeTagger();
-		return tagger;
+		return createTimeTagger();
 	}
 	catch (...) {
 		return NULL;
@@ -40,63 +97,47 @@ void* getTagger() {
 }
 
 void freeTagger(void* tagger) {
-	TimeTagger* castedTagger = static_cast<TimeTagger*>(tagger);
-	freeTimeTagger(castedTagger);
+	freeTimeTagger(static_cast<TimeTagger*>(tagger));
 }
 
 void* newMeasurement(void* tagger, MeasurementParams_t params, const char* directory) {
-	if(directory == NULL) {
-		enableFileWrite = false;
-	} else {
-		enableFileWrite = true;
-		const errno_t err = strcpy_s(outputDir, sizeof(outputDir), directory);
-		if (err) {
-			return NULL;
-		}
-	}
+	MeasurementWrapper* wrapper = new MeasurementWrapper();
+	wrapper->enableFileWrite = (directory != NULL);
 
 	std::set<channel_t> detectorChannelSet;
 	for (size_t x = 0; x < params.detectorChannelsLength; x++) {
 		detectorChannelSet.insert(params.detectorChannels[x]);
 	}
 
-	//Generate buffers for file writing
-	if (enableFileWrite) {
-		fileWriteDatasLength = params.detectorChannelsLength;
-		fileWriteDatas = (FileWriteData*) malloc(fileWriteDatasLength * sizeof(*fileWriteDatas));
-		if (fileWriteDatas == NULL) {
+	if (wrapper->enableFileWrite) {
+		wrapper->fileWriteDatasLength = params.detectorChannelsLength;
+		wrapper->fileWriteDatas = (FileWriteData*)malloc(wrapper->fileWriteDatasLength * sizeof(*wrapper->fileWriteDatas));
+		if (wrapper->fileWriteDatas == NULL) {
+			delete wrapper;
 			return NULL;
 		}
-		for(size_t i = 0; i < fileWriteDatasLength; i++) {
-			fileWriteDatas[i].detectorChannel = params.detectorChannels[i];
-			fileWriteDatas[i].bufferSizeElements = 2048;
-			fileWriteDatas[i].bufferElements = 0;
-			fileWriteDatas[i].buffer = (char*) malloc(fileWriteDatas[i].bufferSizeElements * PACKED_SIZE);
-			if (fileWriteDatas[i].buffer == NULL) {
-				for (size_t j = 0; j < i; j++) {
-					free(fileWriteDatas[i].buffer);
-				}
-				return NULL;
-			}
+		for (size_t i = 0; i < wrapper->fileWriteDatasLength; i++) {
+			wrapper->fileWriteDatas[i].detectorChannel = params.detectorChannels[i];
+			wrapper->fileWriteDatas[i].bufferSizeElements = 2048;
+			wrapper->fileWriteDatas[i].bufferElements = 0;
+			wrapper->fileWriteDatas[i].buffer = (char*)malloc(wrapper->fileWriteDatas[i].bufferSizeElements * PACKED_SIZE);
+
 			char filename[MAX_PATH];
 			sprintf_s(filename, sizeof(filename), "%s\\data_%d.bin", directory, params.detectorChannels[i]);
-			errno_t ret = fopen_s(&fileWriteDatas[i].file, filename, "wb");
+			errno_t ret = fopen_s(&wrapper->fileWriteDatas[i].file, filename, "wb");
 			if (ret) {
-				printf("Error opening file %s\n", filename);
 				for (size_t j = 0; j <= i; j++) {
-					free(fileWriteDatas[j].buffer);
-					if (j != i) {
-						fclose(fileWriteDatas[j].file);
-					}
+					free(wrapper->fileWriteDatas[j].buffer);
+					if (j != i) fclose(wrapper->fileWriteDatas[j].file);
 				}
+				free(wrapper->fileWriteDatas);
+				delete wrapper;
 				return NULL;
 			}
 		}
 	}
 
 	TimeTagger* castedTagger = static_cast<TimeTagger*>(tagger);
-
-	//Setup hardware params
 	std::vector<channel_t> triggerVector(detectorChannelSet.begin(), detectorChannelSet.end());
 	std::vector<channel_t> filterVector = { params.laserChannel };
 	castedTagger->setConditionalFilter(triggerVector, filterVector);
@@ -105,91 +146,104 @@ void* newMeasurement(void* tagger, MeasurementParams_t params, const char* direc
 	for (auto detectorChannel : detectorChannelSet) {
 		castedTagger->setTriggerLevel(detectorChannel, params.detectorTriggerVoltage);
 	}
-
 	castedTagger->sync();
 
-	return new TDMeasurement(
-		castedTagger,
-		params.laserChannel,
-		detectorChannelSet,
-		params.laserPeriod
-	);
+	wrapper->measurement = new TDMeasurement(castedTagger, params.laserChannel, detectorChannelSet, params.laserPeriod);
+
+	if (wrapper->enableFileWrite) {
+		// Pre-allocate initial vectors to prevent heap pauses during early execution
+		for (int i = 0; i < 3; i++) {
+			std::vector<MacroMicro_t> v;
+			v.reserve(20000000);
+			wrapper->recycleQueue.push(std::move(v));
+		}
+		wrapper->diskThreadRunning = true;
+		wrapper->diskThread = std::thread(fileWriterWorker, wrapper);
+	}
+	else {
+		wrapper->noFileBuffer.reserve(20000000);
+	}
+
+	return wrapper;
 }
 
 void freeMeasurement(void* obj) {
-	TDMeasurement* castedMeasurement = static_cast<TDMeasurement*>(obj);
-	delete castedMeasurement;
+	MeasurementWrapper* wrapper = static_cast<MeasurementWrapper*>(obj);
 
-	if (enableFileWrite) {
-		for (size_t i = 0; i < fileWriteDatasLength; i++) {
-			fclose(fileWriteDatas[i].file);
-			free(fileWriteDatas[i].buffer);
+	if (wrapper->enableFileWrite) {
+		wrapper->diskThreadRunning = false;
+		wrapper->diskCV.notify_all();
+		if (wrapper->diskThread.joinable()) {
+			wrapper->diskThread.join();
 		}
-		free(fileWriteDatas);
+		for (size_t i = 0; i < wrapper->fileWriteDatasLength; i++) {
+			fclose(wrapper->fileWriteDatas[i].file);
+			free(wrapper->fileWriteDatas[i].buffer);
+		}
+		free(wrapper->fileWriteDatas);
 	}
+
+	delete wrapper->measurement;
+	delete wrapper;
 }
 
 void startMeasurement(void* obj) {
-	TDMeasurement* castedMeasurement = static_cast<TDMeasurement*>(obj);
-	castedMeasurement->start();
+	static_cast<MeasurementWrapper*>(obj)->measurement->start();
 }
 
 void stopMeasurement(void* obj) {
-	TDMeasurement* castedMeasurement = static_cast<TDMeasurement*>(obj);
-	castedMeasurement->stop();
+	static_cast<MeasurementWrapper*>(obj)->measurement->stop();
 }
 
-int getData(void* obj, MacroMicro_t** outputData, size_t* outputDataSize) {
-	TDMeasurement* castedMeasurement = static_cast<TDMeasurement*>(obj);
-	std::pair<std::vector<MacroMicro_t>, bool> dataRaw = castedMeasurement->getData();
+int getData(void* obj, MacroMicro_t* outputData, size_t maxOutputSize, size_t* actualOutputSize, int activeChannel) {
+	MeasurementWrapper* wrapper = static_cast<MeasurementWrapper*>(obj);
 
-	if(dataRaw.second) {
-		return 2;
-	}
-
-	//Set size and return early if no data
-	*outputDataSize = dataRaw.first.size();
-	if (*outputDataSize == 0) {
-		*outputData = NULL;
-		return 0;
-	}
-
-	//Copy to heap allocated array
-	*outputData = (MacroMicro_t*)malloc(*outputDataSize * sizeof(**outputData));
-	if (*outputData == NULL) {
-		return 1;
-	}
-
-	std::copy(dataRaw.first.begin(), dataRaw.first.end(), *outputData);
-
-	//Write to file
-	if (enableFileWrite) {
-		for (int x = 0; x < *outputDataSize; x++) {
-			const MacroMicro_t d = (*outputData)[x];
-			int channelIndex = channelIndexOf(fileWriteDatas, fileWriteDatasLength, d.channel);
-			if (channelIndex < 0) {
-				printf("Error finding channel index\n");
-				return 1;
-			}
-			if (fileWriteDatas[channelIndex].bufferElements == fileWriteDatas[channelIndex].bufferSizeElements) {
-				char* temp = (char*) realloc(fileWriteDatas[channelIndex].buffer, 2 * fileWriteDatas[channelIndex].bufferSizeElements * PACKED_SIZE);
-				if (temp == NULL) {
-					printf("Error reallocating buffer\n");
-					return 1;
-				}
-				fileWriteDatas[channelIndex].buffer = temp;
-				fileWriteDatas[channelIndex].bufferSizeElements = 2 * fileWriteDatas[channelIndex].bufferSizeElements;
-			}
-			char* buffer = fileWriteDatas[channelIndex].buffer + fileWriteDatas[channelIndex].bufferElements * PACKED_SIZE;
-			memcpy(buffer, &d.macroTime, sizeof(d.macroTime));
-			memcpy(buffer + sizeof(d.macroTime), &d.microTime, sizeof(d.microTime));
-			fileWriteDatas[channelIndex].bufferElements++;
+	std::vector<MacroMicro_t> incomingBatch;
+	if (wrapper->enableFileWrite) {
+		std::lock_guard<std::mutex> lock(wrapper->diskMutex);
+		if (!wrapper->recycleQueue.empty()) {
+			incomingBatch = std::move(wrapper->recycleQueue.front());
+			wrapper->recycleQueue.pop();
 		}
+	}
+	else {
+		incomingBatch = std::move(wrapper->noFileBuffer);
+	}
 
-		for (int x = 0; x < fileWriteDatasLength; x++) {
-			fwrite(fileWriteDatas[x].buffer, PACKED_SIZE, fileWriteDatas[x].bufferElements, fileWriteDatas[x].file);
-			fileWriteDatas[x].bufferElements = 0;
+	// Safety fallback if queue was empty
+	if (incomingBatch.capacity() == 0) incomingBatch.reserve(20000000);
+
+	bool error = wrapper->measurement->getData(incomingBatch);
+	if (error) return 2;
+
+	size_t copiedCount = 0;
+	for (const auto& d : incomingBatch) {
+		if (d.channel == activeChannel || d.channel == -activeChannel) {
+			if (copiedCount < maxOutputSize) {
+				outputData[copiedCount] = d;
+				copiedCount++;
+			}
+			else break;
 		}
+	}
+	*actualOutputSize = copiedCount;
+
+	if (wrapper->enableFileWrite) {
+		if (!incomingBatch.empty()) {
+			std::lock_guard<std::mutex> lock(wrapper->diskMutex);
+			wrapper->diskQueue.push(std::move(incomingBatch));
+			wrapper->diskCV.notify_one();
+		}
+		else {
+			// Return unused vector to recycle queue immediately
+			std::lock_guard<std::mutex> lock(wrapper->diskMutex);
+			wrapper->recycleQueue.push(std::move(incomingBatch));
+		}
+	}
+	else {
+		// Return capacity to non-saving persistent buffer
+		incomingBatch.clear();
+		wrapper->noFileBuffer = std::move(incomingBatch);
 	}
 
 	return 0;

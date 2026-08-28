@@ -18,7 +18,7 @@ extern "C" {
 	TD_API void freeMeasurement(void* obj);
 	TD_API void startMeasurement(void* obj);
 	TD_API void stopMeasurement(void* obj);
-	TD_API int getData(void* obj, MacroMicro_t** outputData, size_t* outputDataSize);
+	TD_API int getData(void* obj, MacroMicro_t* outputData, size_t maxOutputSize, size_t* actualOutputSize, int activeChannel);
 
 #ifdef __cplusplus
 }

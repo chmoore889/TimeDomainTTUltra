@@ -31,26 +31,19 @@ TDMeasurement::~TDMeasurement() {
     stop();
 }
 
-// Get data copies the local data to a newly allocated memory.
-std::pair<std::vector<MacroMicro_t>, bool> TDMeasurement::getData() {
-    std::vector<MacroMicro_t> toReturn;
+bool TDMeasurement::getData(std::vector<MacroMicro_t>& out_vector) {
     bool flagState;
 
-    // Isolate the lock in its own scope
     {
         auto lk = getLock();
 
-        toReturn.swap(data);    // O(1) instant pointer swap
-        data.reserve(20000000); // Allocate fresh block for the next batch
+        // O(1) swap: out_vector gets the data, 'data' inherits out_vector's massive capacity
+        out_vector.swap(data);
 
-        flagState = errorFlag;  // Capture the sticky flag without resetting it
-
-        // 'lk' falls out of scope here. The mutex is released immediately, 
-        // completely unblocking next_impl.
+        flagState = errorFlag;
     }
 
-    // Pair construction and return execution happen safely outside the lock
-    return std::make_pair(std::move(toReturn), flagState);
+    return flagState;
 }
 
 void TDMeasurement::clear_impl() {
@@ -82,14 +75,15 @@ bool TDMeasurement::next_impl(std::vector<Tag>& incoming_tags, timestamp_t begin
         case Tag::Type::TimeTag:
             //printf("channel %i\n", tag.channel);
             if (tag.channel == laser_channel) {
-                data.reserve(data.size() + unprocessedTags.size());
-                for (auto& detTime : unprocessedTags) {
-                    const MacroMicro_t toPush = {
-                        detTime.first,//channel
-                        detTime.second,//macro
-                        static_cast<__int16>(laserPeriod - (tag.time - detTime.second))//micro
+                size_t oldSize = data.size();
+                data.resize(oldSize + unprocessedTags.size());
+
+                for (size_t i = 0; i < unprocessedTags.size(); ++i) {
+                    data[oldSize + i] = {
+                        unprocessedTags[i].first,                                                 // channel
+                        unprocessedTags[i].second,                                                // macro
+                        static_cast<__int16>(laserPeriod - (tag.time - unprocessedTags[i].second)) // micro
                     };
-                    data.push_back(toPush);
                 }
                 unprocessedTags.clear();
             }
