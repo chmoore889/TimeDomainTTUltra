@@ -17,8 +17,11 @@ TDMeasurement::TDMeasurement(TimeTaggerBase* tagger, channel_t laser_channel, st
 
     clear_impl();
 
-    //Reserve space for a few detected photons per laser period
-    unprocessedTags.reserve(detector_channels.size() * 8);
+    // Map the set to a flat array for O(1) lookups
+    is_detector_channel.resize(256, false);
+    for (auto detector_channel : detector_channels) {
+        is_detector_channel[static_cast<uint8_t>(detector_channel)] = true;
+    }
 
     //Reserve lots of space for photons
     data.reserve(20000000);
@@ -75,23 +78,22 @@ bool TDMeasurement::next_impl(std::vector<Tag>& incoming_tags, timestamp_t begin
         case Tag::Type::TimeTag:
             //printf("channel %i\n", tag.channel);
             if (tag.channel == laser_channel) {
-                size_t oldSize = data.size();
-                data.resize(oldSize + unprocessedTags.size());
-
-                for (size_t i = 0; i < unprocessedTags.size(); ++i) {
-                    data[oldSize + i] = {
-                        unprocessedTags[i].first,                                                 // channel
-                        unprocessedTags[i].second,                                                // macro
-                        static_cast<__int16>(laserPeriod - (tag.time - unprocessedTags[i].second)) // micro
-                    };
-                }
-                unprocessedTags.clear();
+                last_laser_time = tag.time;
             }
             //If not the laser channel, it must be detector
             else {
-                assert(detector_channels.find(tag.channel) != detector_channels.end());
+                assert(is_detector_channel[static_cast<uint8_t>(tag.channel)]);
 
-                unprocessedTags.push_back(std::make_pair(tag.channel, tag.time));
+                timestamp_t microTime = (tag.time - last_laser_time) % laserPeriod;
+
+                // Ensure we've seen at least one laser tag before processing detector events
+                if (last_laser_time != 0) {
+                    data.push_back(MacroMicro_t{
+                        static_cast<__int8>(tag.channel),                 // channel
+                        static_cast<long long>(tag.time),                 // macroTime
+                        static_cast<__int16>(microTime)  // microTime
+                        });
+                }
             }
             break;
         }

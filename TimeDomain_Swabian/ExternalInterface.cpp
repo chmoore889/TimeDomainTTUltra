@@ -3,6 +3,7 @@
 #include <condition_variable>
 #include <queue>
 #include <atomic>
+#include <iostream>
 
 #include "TDMeasurement.h"
 #include "ExternalInterface.h"
@@ -19,19 +20,15 @@ typedef struct {
 	int detectorChannel;
 } FileWriteData;
 
-static int channelIndexOf(FileWriteData* channelData, size_t length, int channel) {
-	for (size_t i = 0; i < length; i++) {
-		if (channelData[i].detectorChannel == channel) return i;
-	}
-	return -1;
-}
-
 // 1. Thread State Encapsulation (Eliminates Static Globals)
 struct MeasurementWrapper {
 	TDMeasurement* measurement;
 	bool enableFileWrite = false;
 	FileWriteData* fileWriteDatas = nullptr;
 	size_t fileWriteDatasLength = 0;
+
+	// O(1) lookup table for file writer
+	int channelToIndex[256];
 
 	std::queue<std::vector<MacroMicro_t>> diskQueue;
 	std::queue<std::vector<MacroMicro_t>> recycleQueue; // Fixes Heap Thrashing
@@ -56,7 +53,7 @@ static void fileWriterWorker(MeasurementWrapper* wrapper) {
 		}
 
 		for (const auto& d : batch) {
-			int channelIndex = channelIndexOf(wrapper->fileWriteDatas, wrapper->fileWriteDatasLength, d.channel);
+			int channelIndex = wrapper->channelToIndex[static_cast<uint8_t>(d.channel)];
 			if (channelIndex < 0) continue;
 
 			if (wrapper->fileWriteDatas[channelIndex].bufferElements == wrapper->fileWriteDatas[channelIndex].bufferSizeElements) {
@@ -112,12 +109,20 @@ void* newMeasurement(void* tagger, MeasurementParams_t params, const char* direc
 	if (wrapper->enableFileWrite) {
 		wrapper->fileWriteDatasLength = params.detectorChannelsLength;
 		wrapper->fileWriteDatas = (FileWriteData*)malloc(wrapper->fileWriteDatasLength * sizeof(*wrapper->fileWriteDatas));
+
+		// Initialize lookup array to -1
+		std::fill_n(wrapper->channelToIndex, 256, -1);
+
 		if (wrapper->fileWriteDatas == NULL) {
 			delete wrapper;
 			return NULL;
 		}
 		for (size_t i = 0; i < wrapper->fileWriteDatasLength; i++) {
 			wrapper->fileWriteDatas[i].detectorChannel = params.detectorChannels[i];
+
+			// Map the hardware channel (cast to uint8_t to safely handle negative channels) to the array index
+			wrapper->channelToIndex[static_cast<uint8_t>(params.detectorChannels[i])] = i;
+
 			wrapper->fileWriteDatas[i].bufferSizeElements = 2048;
 			wrapper->fileWriteDatas[i].bufferElements = 0;
 			wrapper->fileWriteDatas[i].buffer = (char*)malloc(wrapper->fileWriteDatas[i].bufferSizeElements * PACKED_SIZE);
@@ -138,9 +143,17 @@ void* newMeasurement(void* tagger, MeasurementParams_t params, const char* direc
 	}
 
 	TimeTagger* castedTagger = static_cast<TimeTagger*>(tagger);
+
+	//Delay laser channel by laser period in hardware for filtering purpose
+	castedTagger->setDelayHardware(params.laserChannel, params.laserPeriod);
+
+	//Set up conditional filter
 	std::vector<channel_t> triggerVector(detectorChannelSet.begin(), detectorChannelSet.end());
 	std::vector<channel_t> filterVector = { params.laserChannel };
 	castedTagger->setConditionalFilter(triggerVector, filterVector);
+
+	//Use software delay to push laser channel timestamps back forward
+	castedTagger->setDelaySoftware(params.laserChannel, -params.laserPeriod);
 
 	castedTagger->setTriggerLevel(params.laserChannel, params.laserTriggerVoltage);
 	for (auto detectorChannel : detectorChannelSet) {

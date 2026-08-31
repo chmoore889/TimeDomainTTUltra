@@ -50,10 +50,11 @@ private:
 	const channel_t laser_channel;
 	const std::set<channel_t> detector_channels;
 	const timestamp_t laserPeriod;
+	std::vector<bool> is_detector_channel;
 
 	std::vector<MacroMicro_t> data;
 
 	// data variable bin_index -> counts
-	std::vector<std::pair<__int8, timestamp_t>> unprocessedTags;
+	timestamp_t last_laser_time = 0;
 	bool errorFlag = false;
 };
