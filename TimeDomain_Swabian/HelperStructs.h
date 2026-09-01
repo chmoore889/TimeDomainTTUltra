@@ -16,4 +16,6 @@ typedef struct
 	int* detectorChannels;
 	size_t detectorChannelsLength;
 	double detectorTriggerVoltage;
+
+	__int16 hardwareDelayPs;
 } MeasurementParams_t;

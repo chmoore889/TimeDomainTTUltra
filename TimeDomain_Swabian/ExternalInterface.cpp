@@ -145,7 +145,7 @@ void* newMeasurement(void* tagger, MeasurementParams_t params, const char* direc
 	TimeTagger* castedTagger = static_cast<TimeTagger*>(tagger);
 
 	//Delay laser channel by laser period in hardware for filtering purpose
-	castedTagger->setDelayHardware(params.laserChannel, params.laserPeriod);
+	castedTagger->setDelayHardware(params.laserChannel, params.laserPeriod + params.hardwareDelayPs);
 
 	//Set up conditional filter
 	std::vector<channel_t> triggerVector(detectorChannelSet.begin(), detectorChannelSet.end());
