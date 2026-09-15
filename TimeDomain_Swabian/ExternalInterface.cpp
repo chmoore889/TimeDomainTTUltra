@@ -81,6 +81,7 @@ static void fileWriterWorker(MeasurementWrapper* wrapper) {
 			std::lock_guard<std::mutex> lock(wrapper->diskMutex);
 			wrapper->recycleQueue.push(std::move(batch));
 		}
+		wrapper->diskCV.notify_all();
 	}
 }
 
@@ -213,7 +214,12 @@ int getData(void* obj, MacroMicro_t* outputData, size_t maxOutputSize, size_t* a
 
 	std::vector<MacroMicro_t> incomingBatch;
 	if (wrapper->enableFileWrite) {
-		std::lock_guard<std::mutex> lock(wrapper->diskMutex);
+		std::unique_lock<std::mutex> lock(wrapper->diskMutex);
+
+		if (wrapper->diskQueue.size() > 10) {
+			wrapper->diskCV.wait(lock, [wrapper] { return !wrapper->recycleQueue.empty(); });
+		}
+
 		if (!wrapper->recycleQueue.empty()) {
 			incomingBatch = std::move(wrapper->recycleQueue.front());
 			wrapper->recycleQueue.pop();
@@ -221,10 +227,10 @@ int getData(void* obj, MacroMicro_t* outputData, size_t maxOutputSize, size_t* a
 	}
 	else {
 		incomingBatch = std::move(wrapper->noFileBuffer);
-	}
+	}	
 
 	// Safety fallback if queue was empty
-	if (incomingBatch.capacity() == 0) incomingBatch.reserve(20000000);
+	if (incomingBatch.capacity() == 0) incomingBatch.reserve(5000000);
 
 	bool error = wrapper->measurement->getData(incomingBatch);
 	if (error) return 2;
