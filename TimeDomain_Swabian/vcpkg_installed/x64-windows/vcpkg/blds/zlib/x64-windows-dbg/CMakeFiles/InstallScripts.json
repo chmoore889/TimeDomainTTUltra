@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-dbg/cmake_install.cmake",
+		"C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-dbg/contrib/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

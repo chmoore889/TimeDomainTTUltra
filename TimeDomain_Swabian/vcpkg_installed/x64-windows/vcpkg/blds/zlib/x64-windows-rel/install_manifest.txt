@@ -1,0 +1,17 @@
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/lib/z.lib
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/bin/z.dll
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/lib/cmake/zlib/ZLIB-shared.cmake
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/lib/cmake/zlib/ZLIB-shared-release.cmake
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/lib/cmake/zlib/ZLIBConfig.cmake
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/lib/cmake/zlib/ZLIBConfigVersion.cmake
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/include/zconf.h
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/include/zlib.h
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/man/man3/zlib.3
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/LICENSE
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/algorithm.txt
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/crc-doc.1.0.pdf
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/rfc1950.txt
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/rfc1951.txt
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/rfc1952.txt
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/share/doc/zlib/zlib/txtvsbin.txt
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/pkgs/zlib_x64-windows/lib/pkgconfig/zlib.pc

@@ -1,0 +1,15 @@
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/zlib.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/package.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/package_source.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/edit_cache.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/rebuild_cache.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/list_install_components.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/install.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/CMakeFiles/install/local.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/package.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/package_source.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/edit_cache.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/rebuild_cache.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/list_install_components.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/install.dir
+C:/Users/sunar/source/repos/TimeDomainTTUltra/TimeDomain_Swabian/vcpkg_installed/x64-windows/vcpkg/blds/zlib/x64-windows-rel/contrib/CMakeFiles/install/local.dir
