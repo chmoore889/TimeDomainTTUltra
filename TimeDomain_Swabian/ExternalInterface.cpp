@@ -121,8 +121,8 @@ static void backgroundWorker(MeasurementWrapper* wrapper) {
 		{
 			std::lock_guard<std::mutex> lock(wrapper->dartMutex);
 
-			// If Dart is falling behind (more than 5 batches queued), drop the oldest batch
-			if (wrapper->dartQueue.size() > 5) {
+			// If Dart is falling behind (more than 15 batches queued), drop the oldest batch
+			if (wrapper->dartQueue.size() > 15) {
 				wrapper->recycleQueue.push(std::move(wrapper->dartQueue.front()));
 				wrapper->dartQueue.pop();
 			}
@@ -227,7 +227,7 @@ void* newMeasurement(void* tagger, MeasurementParams_t params, const char* direc
 
 	if (wrapper->enableFileWrite) {
 		// Pre-allocate initial vectors to prevent heap pauses during early execution
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 5; i++) {
 			std::vector<MacroMicro_t> v;
 			v.reserve(20000000);
 			wrapper->recycleQueue.push(std::move(v));
@@ -281,48 +281,71 @@ int getData(void* obj, MacroMicro_t* outputData, size_t maxOutputSize, size_t* a
 
 	if (wrapper->hardwareError) return 2;
 
-	std::vector<MacroMicro_t> incomingBatch;
+	size_t copiedCount = 0;
 
 	if (wrapper->enableFileWrite) {
-		std::lock_guard<std::mutex> lock(wrapper->dartMutex);
-		if (wrapper->dartQueue.empty()) {
-			*actualOutputSize = 0;
-			return 0; // Dart will sleep and try again later
+		std::queue<std::vector<MacroMicro_t>> localQueue;
+
+		// 1. Lock briefly just to steal the entire queue in O(1) time
+		{
+			std::lock_guard<std::mutex> lock(wrapper->dartMutex);
+			std::swap(localQueue, wrapper->dartQueue);
 		}
-		incomingBatch = std::move(wrapper->dartQueue.front());
-		wrapper->dartQueue.pop();
+
+		// 2. Process data locally WITHOUT holding the lock
+		while (!localQueue.empty() && copiedCount < maxOutputSize) {
+			std::vector<MacroMicro_t> incomingBatch = std::move(localQueue.front());
+			localQueue.pop();
+
+			for (const auto& d : incomingBatch) {
+				if (d.channel == activeChannel || d.channel == -activeChannel) {
+					if (copiedCount < maxOutputSize) {
+						outputData[copiedCount] = d;
+						copiedCount++;
+					}
+					else break;
+				}
+			}
+
+			// 3. Lock briefly to return the emptied vector to the recycle pool
+			incomingBatch.clear();
+			{
+				std::lock_guard<std::mutex> lock(wrapper->dartMutex);
+				wrapper->recycleQueue.push(std::move(incomingBatch));
+			}
+		}
+
+		// 4. If Dart's persistent buffer fills up early, clear and recycle any remaining unread batches
+		while (!localQueue.empty()) {
+			std::vector<MacroMicro_t> leftover = std::move(localQueue.front());
+			localQueue.pop();
+			leftover.clear();
+			{
+				std::lock_guard<std::mutex> lock(wrapper->dartMutex);
+				wrapper->recycleQueue.push(std::move(leftover));
+			}
+		}
 	}
 	else {
 		// Fallback for when disk saving is disabled
-		incomingBatch = std::move(wrapper->noFileBuffer);
+		std::vector<MacroMicro_t> incomingBatch = std::move(wrapper->noFileBuffer);
 		if (incomingBatch.capacity() == 0) incomingBatch.reserve(5000000);
 		bool error = wrapper->measurement->getData(incomingBatch);
 		if (error) return 2;
-	}
 
-	size_t copiedCount = 0;
-	for (const auto& d : incomingBatch) {
-		if (d.channel == activeChannel || d.channel == -activeChannel) {
-			if (copiedCount < maxOutputSize) {
-				outputData[copiedCount] = d;
-				copiedCount++;
+		for (const auto& d : incomingBatch) {
+			if (d.channel == activeChannel || d.channel == -activeChannel) {
+				if (copiedCount < maxOutputSize) {
+					outputData[copiedCount] = d;
+					copiedCount++;
+				}
+				else break;
 			}
-			else break;
 		}
-	}
-	*actualOutputSize = copiedCount;
-
-	if (wrapper->enableFileWrite) {
-		// Return vector to recycle queue immediately
-		incomingBatch.clear();
-		std::lock_guard<std::mutex> lock(wrapper->dartMutex);
-		wrapper->recycleQueue.push(std::move(incomingBatch));
-	}
-	else {
-		// Return capacity to non-saving persistent buffer
 		incomingBatch.clear();
 		wrapper->noFileBuffer = std::move(incomingBatch);
 	}
 
+	*actualOutputSize = copiedCount;
 	return 0;
 }
